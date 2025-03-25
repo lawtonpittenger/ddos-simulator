@@ -141,7 +141,12 @@ Resources:
       PackageType: Image
       Role: !GetAtt DDoSLambdaRole.Arn
       MemorySize: 10240
-      Timeout: 500
+      Timeout: 900
+      Environment:
+        Variables:
+          TARGET_URL: 'INSERT-TARGET-URL'
+          DURATION_SECONDS: '899'
+          REQUESTS_PER_SECOND: '1000'
     DependsOn:
       - BuildCodeCustomResource
 

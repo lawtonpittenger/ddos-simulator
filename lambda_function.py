@@ -13,24 +13,32 @@ def handler(event, context):
     """
     try:
         # Get parameters from environment variables
-        target = os.environ.get('TARGET_URL', 'https://example.com')
-        duration = int(os.environ.get('DURATION_SECONDS', '10'))
-        requests_per_second = int(os.environ.get('REQUESTS_PER_SECOND', '10'))
+        target = os.environ['TARGET_URL']
+        duration = int(os.environ['DURATION_SECONDS'])
+        requests_per_second = int(os.environ['REQUESTS_PER_SECOND'])
+        user_agent = 'DemoAttack'
+        load_type = 'waved'
+        
+        # Calculate total number of requests
+        total_requests = requests_per_second * duration
         
         # Log the attack parameters
         logger.info(f"Starting DDoS simulation against {target}")
-        logger.info(f"Duration: {duration}s, RPS: {requests_per_second}")
+        logger.info(f"Duration: {duration}s, RPS: {requests_per_second}, Total requests: {total_requests}")
+        logger.info(f"User-Agent: {user_agent}, Load type: {load_type}")
         
-        # Construct the ddosify command
+        # Construct the ddosify command to match the original CLI pattern
         cmd = [
             "ddosify_engine",
-            "-t", target,
+            "-n", str(total_requests),
             "-d", str(duration),
-            "-n", str(requests_per_second),
-            "-m", "GET"
+            "-h", f"User-Agent: {user_agent}",
+            "-t", target,
+            "-l", load_type
         ]
         
         # Execute the command
+        logger.info(f"Executing command: {' '.join(cmd)}")
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -49,6 +57,9 @@ def handler(event, context):
                 'target': target,
                 'duration': duration,
                 'requests_per_second': requests_per_second,
+                'total_requests': total_requests,
+                'user_agent': user_agent,
+                'load_type': load_type,
                 'output': result.stdout,
                 'errors': result.stderr
             })
