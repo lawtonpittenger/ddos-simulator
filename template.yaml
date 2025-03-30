@@ -133,7 +133,7 @@ Resources:
               Resource: !GetAtt ECRRepo.Arn
 
   # DDoS Simulation Lambda - Runs Docker image created by CodeBuild project
-  EncryptLambdaFunction:
+  DDOSLambdaFunction:
     Type: "AWS::Lambda::Function"
     Properties:
       Code:
@@ -141,14 +141,15 @@ Resources:
       PackageType: Image
       Role: !GetAtt DDoSLambdaRole.Arn
       MemorySize: 10240
-      Timeout: 900
+      Timeout: 300
       Environment:
         Variables:
           TARGET_URL: 'INSERT-TARGET-URL'
-          DURATION_SECONDS: '899'
-          REQUESTS_PER_SECOND: '1000'
+          DURATION_SECONDS: '60'
+          REQUESTS_PER_SECOND: '10000'
     DependsOn:
       - BuildCodeCustomResource
+      - CodeBuildProject
 
 
 
