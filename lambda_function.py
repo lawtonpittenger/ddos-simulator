@@ -12,9 +12,6 @@ def handler(event, context):
     The target URL is retrieved from environment variables.
     """
     try:
-        print(f"Current working directory: {os.getcwd()}")
-        print(f"Directory contents: {os.listdir()}")
-        print(f"Binary location: {subprocess.run(['which', 'ddosify_engine'], capture_output=True, text=True).stdout}")
         # Get parameters from environment variables
         target = os.environ['TARGET_URL']
         duration = int(os.environ['DURATION_SECONDS'])
