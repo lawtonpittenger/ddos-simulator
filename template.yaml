@@ -1,11 +1,15 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: "Template to provision resources required to simulate a DDoS attack on your own AWS resource"
 
+
+Parameters:
+  AttackResource:
+    Description: URL of resource to be DDoS'd. (MUST include http:// or https:// in URL)
+    Type: String
+
 Resources:
 
 ### Build Resources ###
-
-  
   ECRRepo:
     Type: AWS::ECR::Repository
     Properties:
@@ -144,7 +148,7 @@ Resources:
       Timeout: 300
       Environment:
         Variables:
-          TARGET_URL: 'INSERT-TARGET-URL'
+          TARGET_URL: !Ref AttackResource
           DURATION_SECONDS: '60'
           REQUESTS_PER_SECOND: '10000'
     DependsOn:
