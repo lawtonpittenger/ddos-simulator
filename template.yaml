@@ -5,6 +5,7 @@ Resources:
 
 ### Build Resources ###
 
+  
   ECRRepo:
     Type: AWS::ECR::Repository
     Properties:
@@ -114,7 +115,7 @@ Resources:
                 - lambda.amazonaws.com
             Action:
               - 'sts:AssumeRole'
-      Description: Role for DDoS Lambda function
+      Description: Role for DDoS Lambda
       ManagedPolicyArns:
         - !GetAtt LogsPolicy.PolicyArn
         - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceEventsRole
@@ -132,7 +133,7 @@ Resources:
               Resource: !GetAtt ECRRepo.Arn
 
   # DDoS Simulation Lambda - Runs Docker image created by CodeBuild project
-  DDoSLambdaFunction:
+  EncryptLambdaFunction:
     Type: "AWS::Lambda::Function"
     Properties:
       Code:
