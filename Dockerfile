@@ -6,19 +6,13 @@ RUN dnf update -y
 RUN dnf install -y git golang
 
 # Clone and build Ddosify Engine
-RUN git clone https://github.com/getanteon/anteon.git /tmp/anteon
-WORKDIR /tmp/anteon/ddosify_engine
+RUN git clone https://github.com/getanteon/anteon.git /var/task/anteon
+WORKDIR /var/task/anteon/ddosify_engine
 RUN go build -o ddosify_engine
 
 # Move the binary to a location in PATH
 RUN cp ddosify_engine /usr/local/bin/
 RUN chmod +x /usr/local/bin/ddosify_engine
-
-# Copy requirements.txt
-# COPY requirements.txt ${LAMBDA_TASK_ROOT}
-
-# Install the specified packages
-# RUN pip install -r requirements.txt
 
 # Copy function code
 COPY lambda_function.py ${LAMBDA_TASK_ROOT}
