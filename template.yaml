@@ -10,6 +10,186 @@ Parameters:
 Resources:
 
 ### Build Resources ###
+
+  SourceCodeBucket:
+    Type: AWS::S3::Bucket
+
+  PushSourceCodeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+        Version: '2012-10-17'
+      Path: "/"
+      Policies:
+      - PolicyDocument:
+          Statement:
+          - Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Effect: Allow
+            Resource: arn:aws:logs:*:*:*
+          Version: '2012-10-17'
+        PolicyName: 'cw-logs-access'
+      - PolicyDocument:
+          Statement:
+          - Action:
+            - s3:PutObject
+            - s3:DeleteObject
+            - s3:List*
+            Effect: Allow
+            Resource:
+            - !Sub arn:aws:s3:::${SourceCodeBucket}/*
+            - !Sub arn:aws:s3:::${SourceCodeBucket}
+          Version: '2012-10-17'
+        PolicyName: 'lambda-s3-access'
+
+
+  PushSourceCodeFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: "Push source code to S3"
+      Handler: index.handler
+      Role: !GetAtt PushSourceCodeRole.Arn
+      Timeout: 360
+      Runtime: python3.9
+      Code:
+        ZipFile: !Sub |
+          import boto3
+          import cfnresponse
+
+          def handler(event, context):
+              try:
+                  if event['RequestType'] in ['Create', 'Update']:
+                      s3 = boto3.client('s3')
+                      bucket = event['ResourceProperties']['BucketName']
+
+                      # Upload Dockerfile
+                      dockerfile_content = '''# Grab Python3.12 Lambda base image
+          FROM public.ecr.aws/lambda/python:3.12.2024.01.05.15
+
+          # Install required tools
+          RUN dnf update -y
+          RUN dnf install -y git golang
+
+          # Clone and build Ddosify Engine
+          RUN git clone https://github.com/getanteon/anteon.git /var/task/anteon
+          WORKDIR /var/task/anteon/ddosify_engine
+          RUN go build -o ddosify_engine
+
+          # Move the binary to a location in PATH
+          RUN cp ddosify_engine /usr/local/bin/
+          RUN chmod +x /usr/local/bin/ddosify_engine
+
+          # Copy function code
+          COPY lambda_function.py ${LAMBDA_TASK_ROOT}
+
+          # Set the CMD to your handler 
+          CMD [ "lambda_function.handler" ]'''
+                      s3.put_object(Bucket=bucket, Key='Dockerfile', Body=dockerfile_content)
+
+                      # Upload lambda_function.py
+                      lambda_content = '''
+          import json
+          import subprocess
+          import logging
+          import os
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          def handler(event, context):
+              """
+              Lambda function that runs a DDoS simulation using Ddosify Engine.
+              The target URL is retrieved from environment variables.
+              """
+              try:
+                  # Get parameters from environment variables
+                  target = os.environ['TARGET_URL']
+                  duration = int(os.environ['DURATION_SECONDS'])
+                  requests_per_second = int(os.environ['REQUESTS_PER_SECOND'])
+                  user_agent = 'DemoAttack'
+                  load_type = 'waved'
+                  
+                  # Calculate total number of requests
+                  total_requests = requests_per_second * duration
+                  
+                  # Log the attack parameters
+                  logger.info(f"Starting DDoS simulation against {target}")
+                  logger.info(f"Duration: {duration}s, RPS: {requests_per_second}, Total requests: {total_requests}")
+                  logger.info(f"User-Agent: {user_agent}, Load type: {load_type}")
+                  
+                  # Construct the ddosify command to match the original CLI pattern
+                  cmd = [
+                      "ddosify_engine",
+                      "-n", str(total_requests),
+                      "-d", str(duration),
+                      "-h", f"User-Agent: {user_agent}",
+                      "-t", target,
+                      "-l", load_type
+                  ]
+                  
+                  # Execute the command
+                  logger.info(f"Executing command: {' '.join(cmd)}")
+                  result = subprocess.run(
+                      cmd,
+                      capture_output=True,
+                      text=True
+                  )
+                  
+                  # Log the output
+                  logger.info(f"Command output: {result.stdout}")
+                  if result.stderr:
+                      logger.warning(f"Command errors: {result.stderr}")
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'message': 'DDoS simulation completed',
+                          'target': target,
+                          'duration': duration,
+                          'requests_per_second': requests_per_second,
+                          'total_requests': total_requests,
+                          'user_agent': user_agent,
+                          'load_type': load_type,
+                          'output': result.stdout,
+                          'errors': result.stderr
+                      })
+                  }
+              
+              except Exception as e:
+                  logger.error(f"Error executing DDoS simulation: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({
+                          'message': 'Error executing DDoS simulation',
+                          'error': str(e)
+                      })
+                  }
+                      '''
+                      s3.put_object(Bucket=bucket, Key='lambda_function.py', Body=lambda_content)
+
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  else:
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(e)
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+
+
+  PushSourceCodeCustomResource:
+    Type: Custom::PushSourceCode
+    Properties:
+      ServiceToken: !GetAtt PushSourceCodeFunction.Arn
+      BucketName: !Ref SourceCodeBucket
+
   ECRRepo:
     Type: AWS::ECR::Repository
     Properties:
@@ -58,14 +238,24 @@ Resources:
                   - "codeconnections:*"
                 Resource:
                   - '*'
+        - PolicyName: 'S3Access'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 's3:GetObject'
+                  - 's3:GetObjectVersion'
+                Resource:
+                  - !Sub arn:aws:s3:::${SourceCodeBucket}/*
 
   
   CodeBuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
       Source:
-        Type: GITHUB
-        Location: https://github.com/lawtonpittenger/ddos-simulator.git
+        Type: S3
+        Location: !Sub ${SourceCodeBucket}/
         BuildSpec: 
           !Sub
             - |
