@@ -7,10 +7,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 def handler(event, context):
-    """
-    Lambda function that runs a DDoS simulation using Ddosify Engine.
-    The target URL is retrieved from environment variables.
-    """
+
     try:
         # Get parameters from environment variables
         target = os.environ['TARGET_URL']
